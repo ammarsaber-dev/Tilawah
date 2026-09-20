@@ -105,6 +105,25 @@ public final class CatalogStore {
         return riwayat.first(where: { $0.id == id })?.name
     }
 
+    /// Full playable queue for a mushaf: one asset per available surah,
+    /// in surah order, with display names resolved from `suwar`.
+    public func queueAssets(reciter: Reciter, mushaf: Mushaf) -> [AudioAsset] {
+        mushaf.availableSurahIDs.compactMap { surahID in
+            audioAsset(reciter: reciter, mushaf: mushaf, surahID: surahID)
+        }
+    }
+
+    private func audioAsset(reciter: Reciter, mushaf: Mushaf, surahID: Int) -> AudioAsset? {
+        guard let url = MP3QuranURLBuilder.streamURL(server: mushaf.server, surahID: surahID) else {
+            return nil
+        }
+        return AudioAsset(
+            reciterID: reciter.id, mushafID: mushaf.id, surahID: surahID,
+            reciterName: reciter.name, mushafName: mushaf.name,
+            surahName: surah(id: surahID)?.name, streamURL: url
+        )
+    }
+
     // MARK: - Search
 
     /// Reciters matching `query` against normalized Arabic names.

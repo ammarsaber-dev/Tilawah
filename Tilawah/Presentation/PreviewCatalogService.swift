@@ -80,3 +80,15 @@ struct PreviewFailingCatalogService: QuranCatalogService {
     func fetchSuwar(language: String) async throws -> [Surah] { throw CatalogError.offline }
     func fetchRiwayat(language: String) async throws -> [Riwayah] { throw CatalogError.offline }
 }
+
+@MainActor
+enum PreviewPlayback {
+    /// Player with an empty in-memory state store (nothing restored).
+    static func makeController() -> PlaybackController {
+        PlaybackController(
+            stateStore: PlaybackStateStore(
+                container: PersistenceFactory.makeContainer(inMemory: true)
+            )
+        )
+    }
+}
