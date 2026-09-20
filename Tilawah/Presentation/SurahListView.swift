@@ -12,6 +12,7 @@ import SwiftUI
 struct SurahListView: View {
     @Environment(CatalogStore.self) private var store
     @Environment(PlaybackController.self) private var controller
+    @Environment(DownloadStore.self) private var downloads
     let reciter: Reciter
     let mushaf: Mushaf
 
@@ -30,22 +31,25 @@ struct SurahListView: View {
             } else {
                 Section {
                     ForEach(Array(queue.enumerated()), id: \.element.id) { offset, asset in
-                        Button {
-                            controller.play(queue: queue, index: offset)
-                        } label: {
-                            SurahRow(
-                                asset: asset,
-                                surah: store.surah(id: asset.surahID),
-                                isCurrent: controller.current?.id == asset.id,
-                                isPlaying: controller.isPlaying
-                            )
+                        HStack(spacing: 8) {
+                            Button {
+                                controller.play(queue: queue, index: offset)
+                            } label: {
+                                SurahRow(
+                                    asset: asset,
+                                    surah: store.surah(id: asset.surahID),
+                                    isCurrent: controller.current?.id == asset.id,
+                                    isPlaying: controller.isPlaying
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            DownloadControl(asset: asset)
                         }
-                        .buttonStyle(.plain)
                     }
                 } header: {
                     Text("\(queue.count, format: .number) سورة متاحة")
                 } footer: {
-                    Text("اضغط على أي سورة لبدء الاستماع.")
+                    Text("اضغط على أي سورة لبدء الاستماع، أو نزّلها للاستماع دون إنترنت.")
                 }
             }
         }
@@ -109,6 +113,7 @@ private struct SurahRow: View {
     }
     .environment(CatalogStore(service: PreviewCatalogService()))
     .environment(PreviewPlayback.makeController())
+    .environment(PreviewDownloads.makeStore())
     .environment(\.locale, Locale(identifier: "ar"))
     .environment(\.layoutDirection, .rightToLeft)
 }

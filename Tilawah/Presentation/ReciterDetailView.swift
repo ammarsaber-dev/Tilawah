@@ -62,6 +62,7 @@ private struct MushafRow: View {
     }
     .environment(CatalogStore(service: PreviewCatalogService()))
     .environment(PreviewPlayback.makeController())
+    .environment(PreviewDownloads.makeStore())
     .environment(\.locale, Locale(identifier: "ar"))
     .environment(\.layoutDirection, .rightToLeft)
 }
