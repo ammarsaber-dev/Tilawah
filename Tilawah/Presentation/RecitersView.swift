@@ -14,6 +14,7 @@ struct RecitersView: View {
     @Environment(PlaybackController.self) private var controller
     @State private var query = ""
     @State private var isPlayerExpanded = false
+    @State private var isSettingsPresented = false
 
     var body: some View {
         NavigationStack {
@@ -26,6 +27,16 @@ struct RecitersView: View {
                 .refreshable {
                     await store.reload()
                 }
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            isSettingsPresented = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                        .accessibilityLabel("الإعدادات")
+                    }
+                }
                 .safeAreaInset(edge: .bottom) {
                     if controller.current != nil {
                         MiniPlayer(isExpanded: $isPlayerExpanded)
@@ -33,6 +44,9 @@ struct RecitersView: View {
                 }
                 .sheet(isPresented: $isPlayerExpanded) {
                     ExpandedPlayer()
+                }
+                .sheet(isPresented: $isSettingsPresented) {
+                    SettingsView()
                 }
         }
     }
@@ -103,6 +117,7 @@ private struct ReciterRow: View {
     RecitersView()
         .environment(CatalogStore(service: PreviewCatalogService()))
         .environment(PreviewPlayback.makeController())
+        .environment(PreviewDownloads.makeStore())
         .environment(\.locale, Locale(identifier: "ar"))
         .environment(\.layoutDirection, .rightToLeft)
 }
@@ -111,6 +126,7 @@ private struct ReciterRow: View {
     RecitersView()
         .environment(CatalogStore(service: PreviewFailingCatalogService()))
         .environment(PreviewPlayback.makeController())
+        .environment(PreviewDownloads.makeStore())
         .environment(\.locale, Locale(identifier: "ar"))
         .environment(\.layoutDirection, .rightToLeft)
 }

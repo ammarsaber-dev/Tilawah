@@ -146,6 +146,30 @@ public final class PlaybackController {
         persist()
     }
 
+    /// Re-resolves the current item's source (call after a download is
+    /// deleted or the library changes). If the file behind the current
+    /// item vanished, swaps to the stream at the same position, keeping
+    /// the playing state — never leaves a dead item loaded.
+    public func recheckCurrentSource() {
+        guard let asset = current, let item = player.currentItem,
+              let currentURL = (item.asset as? AVURLAsset)?.url
+        else { return }
+        let resolved = PlaybackSource.url(for: asset, localRoot: PlaybackSource.audioDirectory())
+        guard currentURL != resolved else { return }
+        let wasPlaying = isPlaying
+        let at = position
+        let next = AVPlayerItem(url: resolved)
+        observeItemStatus(next)
+        player.replaceCurrentItem(with: next)
+        if at > 0 {
+            player.seek(to: CMTime(seconds: at, preferredTimescale: 600))
+        }
+        if wasPlaying {
+            player.play()
+        }
+        updateNowPlaying()
+    }
+
     // MARK: - Item loading
 
     private func loadCurrentAndPlay(autoplay: Bool = true) {

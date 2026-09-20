@@ -92,3 +92,11 @@ enum PreviewPlayback {
         )
     }
 }
+
+@MainActor
+enum PreviewDownloads {
+    /// Download store over an empty in-memory database (nothing downloaded).
+    static func makeStore() -> DownloadStore {
+        DownloadStore(container: PersistenceFactory.makeContainer(inMemory: true))
+    }
+}
