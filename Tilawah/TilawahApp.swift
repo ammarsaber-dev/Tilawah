@@ -42,7 +42,11 @@ struct TilawahApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        let container = PersistenceFactory.makeContainer()
+        // UI-test isolation: `-TilawahResetData` runs the whole stack
+        // (SwiftData, playback position, download records) in-memory so
+        // every launch starts from a clean slate. Never set otherwise.
+        let resetForUITests = CommandLine.arguments.contains("-TilawahResetData")
+        let container = PersistenceFactory.makeContainer(inMemory: resetForUITests)
         self.container = container
         let stateStore = PlaybackStateStore(container: container)
         let playback = PlaybackController(stateStore: stateStore)
