@@ -61,6 +61,7 @@ private struct MushafRow: View {
         ReciterDetailView(reciter: PreviewCatalogService.sampleReciters[0])
     }
     .environment(CatalogStore(service: PreviewCatalogService()))
+    .environment(PreviewPlayback.makeController())
     .environment(\.locale, Locale(identifier: "ar"))
     .environment(\.layoutDirection, .rightToLeft)
 }

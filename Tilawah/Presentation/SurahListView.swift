@@ -11,16 +11,17 @@ import SwiftUI
 
 struct SurahListView: View {
     @Environment(CatalogStore.self) private var store
+    @Environment(PlaybackController.self) private var controller
     let reciter: Reciter
     let mushaf: Mushaf
 
-    private var availableIDs: [Int] {
-        mushaf.availableSurahIDs
+    private var queue: [AudioAsset] {
+        store.queueAssets(reciter: reciter, mushaf: mushaf)
     }
 
     var body: some View {
         List {
-            if availableIDs.isEmpty {
+            if queue.isEmpty {
                 ContentUnavailableView(
                     "لا توجد سور متاحة",
                     systemImage: "book.closed",
@@ -28,14 +29,23 @@ struct SurahListView: View {
                 )
             } else {
                 Section {
-                    ForEach(availableIDs, id: \.self) { surahID in
-                        SurahRow(
-                            surahID: surahID,
-                            surah: store.surah(id: surahID)
-                        )
+                    ForEach(Array(queue.enumerated()), id: \.element.id) { offset, asset in
+                        Button {
+                            controller.play(queue: queue, index: offset)
+                        } label: {
+                            SurahRow(
+                                asset: asset,
+                                surah: store.surah(id: asset.surahID),
+                                isCurrent: controller.current?.id == asset.id,
+                                isPlaying: controller.isPlaying
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 } header: {
-                    Text("\(availableIDs.count, format: .number) سورة متاحة")
+                    Text("\(queue.count, format: .number) سورة متاحة")
+                } footer: {
+                    Text("اضغط على أي سورة لبدء الاستماع.")
                 }
             }
         }
@@ -45,12 +55,14 @@ struct SurahListView: View {
 }
 
 private struct SurahRow: View {
-    let surahID: Int
+    let asset: AudioAsset
     let surah: Surah?
+    let isCurrent: Bool
+    let isPlaying: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(surahID, format: .number)
+            Text(asset.surahID, format: .number)
                 .font(.headline.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 44, alignment: .center)
@@ -59,9 +71,11 @@ private struct SurahRow: View {
                 if let name = surah?.name {
                     Text(name)
                         .font(.headline)
+                        .fontWeight(isCurrent ? .bold : .regular)
                 } else {
-                    Text("سورة \(surahID, format: .number)")
+                    Text("سورة \(asset.surahID, format: .number)")
                         .font(.headline)
+                        .fontWeight(isCurrent ? .bold : .regular)
                 }
                 if let surah, let makkia = surah.makkia {
                     if makkia == 1 {
@@ -74,6 +88,12 @@ private struct SurahRow: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+            Spacer(minLength: 8)
+            if isCurrent {
+                Image(systemName: isPlaying ? "waveform" : "pause")
+                    .foregroundStyle(.tint)
+                    .accessibilityLabel(isPlaying ? "تُشغَّل الآن" : "متوقفة مؤقتًا")
             }
         }
         .accessibilityElement(children: .combine)
@@ -88,6 +108,7 @@ private struct SurahRow: View {
         )
     }
     .environment(CatalogStore(service: PreviewCatalogService()))
+    .environment(PreviewPlayback.makeController())
     .environment(\.locale, Locale(identifier: "ar"))
     .environment(\.layoutDirection, .rightToLeft)
 }

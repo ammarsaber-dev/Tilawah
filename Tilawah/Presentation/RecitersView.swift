@@ -11,7 +11,9 @@ import SwiftUI
 
 struct RecitersView: View {
     @Environment(CatalogStore.self) private var store
+    @Environment(PlaybackController.self) private var controller
     @State private var query = ""
+    @State private var isPlayerExpanded = false
 
     var body: some View {
         NavigationStack {
@@ -23,6 +25,14 @@ struct RecitersView: View {
                 }
                 .refreshable {
                     await store.reload()
+                }
+                .safeAreaInset(edge: .bottom) {
+                    if controller.current != nil {
+                        MiniPlayer(isExpanded: $isPlayerExpanded)
+                    }
+                }
+                .sheet(isPresented: $isPlayerExpanded) {
+                    ExpandedPlayer()
                 }
         }
     }
@@ -92,6 +102,7 @@ private struct ReciterRow: View {
 #Preview("Reciters") {
     RecitersView()
         .environment(CatalogStore(service: PreviewCatalogService()))
+        .environment(PreviewPlayback.makeController())
         .environment(\.locale, Locale(identifier: "ar"))
         .environment(\.layoutDirection, .rightToLeft)
 }
@@ -99,6 +110,7 @@ private struct ReciterRow: View {
 #Preview("Reciters — offline") {
     RecitersView()
         .environment(CatalogStore(service: PreviewFailingCatalogService()))
+        .environment(PreviewPlayback.makeController())
         .environment(\.locale, Locale(identifier: "ar"))
         .environment(\.layoutDirection, .rightToLeft)
 }
