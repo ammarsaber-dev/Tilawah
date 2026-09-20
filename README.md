@@ -74,8 +74,9 @@ xcodebuild test -scheme Tilawah -destination 'platform=iOS Simulator,name=iPhone
 ```
 
 Use `xcrun simctl list devices` if the simulator name differs on your Mac.
-CI (`.github/workflows/ci.yml`) resolves an available iPhone simulator
-dynamically and runs the same scheme.
+CI (`.github/workflows/ci.yml`) runs on the `xcode-27` image (the only
+hosted image with Xcode 27), resolves an available iPhone simulator
+dynamically, and runs the same scheme.
 
 ## Localization
 
