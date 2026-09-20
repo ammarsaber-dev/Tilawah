@@ -44,6 +44,11 @@ public final class PlaybackController {
     private var itemStatusCancellable: AnyCancellable?
     private var lastSavedPosition: Double = -1
 
+    /// Fired whenever a new track starts (library history).
+    public var onTrackChanged: ((AudioAsset) -> Void)?
+    /// Fired with throttled position saves (history resume points).
+    public var onPositionSaved: ((String, Double) -> Void)?
+
     // App-lifetime object: observers/tokens are never torn down (documented;
     // teardown would only matter if the controller were transient, which the
     // architecture forbids — exactly one player, owned by the app root).
@@ -64,15 +69,16 @@ public final class PlaybackController {
     // MARK: - Transport
 
     /// Plays `queue[index]]`. Re-tapping the current asset toggles instead.
-    public func play(queue newQueue: [AudioAsset], index newIndex: Int) {
+    /// `startAt` seeks right after loading (bookmark resume).
+    public func play(queue newQueue: [AudioAsset], index newIndex: Int, startAt: Double = 0) {
         guard !newQueue.isEmpty, newQueue.indices.contains(newIndex) else { return }
-        if newQueue[newIndex].id == current?.id, player.currentItem != nil {
+        if newQueue[newIndex].id == current?.id, player.currentItem != nil, startAt == 0 {
             toggle()
             return
         }
         queue = newQueue
         index = newIndex
-        loadCurrentAndPlay()
+        loadCurrentAndPlay(startPosition: startAt)
     }
 
     public func toggle() {
@@ -172,7 +178,7 @@ public final class PlaybackController {
 
     // MARK: - Item loading
 
-    private func loadCurrentAndPlay(autoplay: Bool = true) {
+    private func loadCurrentAndPlay(autoplay: Bool = true, startPosition: Double = 0) {
         guard let asset = current else { return }
         playbackError = nil
         position = 0
@@ -181,7 +187,12 @@ public final class PlaybackController {
         let item = AVPlayerItem(url: url)
         observeItemStatus(item)
         player.replaceCurrentItem(with: item)
+        if startPosition > 0 {
+            player.seek(to: CMTime(seconds: startPosition, preferredTimescale: 600))
+            position = startPosition
+        }
         updateNowPlaying()
+        onTrackChanged?(asset)
         if autoplay {
             activateSession()
             player.play()
@@ -424,6 +435,9 @@ public final class PlaybackController {
             index: index,
             position: position
         ))
+        if let asset = current {
+            onPositionSaved?(asset.id, position)
+        }
     }
 
     private func restoreLastSession() {

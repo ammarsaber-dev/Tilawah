@@ -11,44 +11,32 @@ import SwiftUI
 
 struct RecitersView: View {
     @Environment(CatalogStore.self) private var store
-    @Environment(PlaybackController.self) private var controller
     @State private var query = ""
-    @State private var isPlayerExpanded = false
     @State private var isSettingsPresented = false
 
     var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle("القرّاء")
-                .searchable(text: $query, prompt: "ابحث عن قارئ")
-                .task {
-                    await store.load()
-                }
-                .refreshable {
-                    await store.reload()
-                }
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            isSettingsPresented = true
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }
-                        .accessibilityLabel("الإعدادات")
+        content
+            .navigationTitle("القرّاء")
+            .searchable(text: $query, prompt: "ابحث عن قارئ")
+            .task {
+                await store.load()
+            }
+            .refreshable {
+                await store.reload()
+            }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        isSettingsPresented = true
+                    } label: {
+                        Image(systemName: "gearshape")
                     }
+                    .accessibilityLabel("الإعدادات")
                 }
-                .safeAreaInset(edge: .bottom) {
-                    if controller.current != nil {
-                        MiniPlayer(isExpanded: $isPlayerExpanded)
-                    }
-                }
-                .sheet(isPresented: $isPlayerExpanded) {
-                    ExpandedPlayer()
-                }
-                .sheet(isPresented: $isSettingsPresented) {
-                    SettingsView()
-                }
-        }
+            }
+            .sheet(isPresented: $isSettingsPresented) {
+                SettingsView()
+            }
     }
 
     @ViewBuilder
@@ -114,19 +102,25 @@ private struct ReciterRow: View {
 }
 
 #Preview("Reciters") {
-    RecitersView()
+    NavigationStack {
+        RecitersView()
+    }
         .environment(CatalogStore(service: PreviewCatalogService()))
         .environment(PreviewPlayback.makeController())
         .environment(PreviewDownloads.makeStore())
+        .environment(PreviewLibrary.makeStore())
         .environment(\.locale, Locale(identifier: "ar"))
         .environment(\.layoutDirection, .rightToLeft)
 }
 
 #Preview("Reciters — offline") {
-    RecitersView()
+    NavigationStack {
+        RecitersView()
+    }
         .environment(CatalogStore(service: PreviewFailingCatalogService()))
         .environment(PreviewPlayback.makeController())
         .environment(PreviewDownloads.makeStore())
+        .environment(PreviewLibrary.makeStore())
         .environment(\.locale, Locale(identifier: "ar"))
         .environment(\.layoutDirection, .rightToLeft)
 }

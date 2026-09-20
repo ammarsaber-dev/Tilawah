@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ExpandedPlayer: View {
     @Environment(PlaybackController.self) private var controller
+    @Environment(LibraryStore.self) private var library
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -115,6 +116,23 @@ struct ExpandedPlayer: View {
                     .font(.footnote)
                     .foregroundStyle(controller.repeatMode == .off ? Color.secondary : Color.accentColor)
 
+                    HStack(spacing: 24) {
+                        Button {
+                            library.toggleFavorite(asset)
+                        } label: {
+                            Label(
+                                isFavorite ? "في المفضلة" : "إضافة إلى المفضلة",
+                                systemImage: isFavorite ? "heart.fill" : "heart"
+                            )
+                        }
+                        Button {
+                            library.addBookmark(asset, position: controller.position)
+                        } label: {
+                            Label("حفظ علامة هنا", systemImage: "bookmark")
+                        }
+                    }
+                    .font(.footnote)
+
                     Spacer(minLength: 8)
                 }
                 .padding(.horizontal, 24)
@@ -155,5 +173,10 @@ struct ExpandedPlayer: View {
         case .all: "repeat"
         case .one: "repeat.1"
         }
+    }
+
+    private var isFavorite: Bool {
+        guard let asset = controller.current else { return false }
+        return library.isFavorite(assetID: asset.id)
     }
 }

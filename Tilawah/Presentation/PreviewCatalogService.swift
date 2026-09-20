@@ -100,3 +100,11 @@ enum PreviewDownloads {
         DownloadStore(container: PersistenceFactory.makeContainer(inMemory: true))
     }
 }
+
+@MainActor
+enum PreviewLibrary {
+    /// Library store over an empty in-memory database (empty shelves).
+    static func makeStore() -> LibraryStore {
+        LibraryStore(container: PersistenceFactory.makeContainer(inMemory: true))
+    }
+}

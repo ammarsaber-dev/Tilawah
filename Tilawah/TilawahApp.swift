@@ -3,8 +3,9 @@
 //  Tilawah
 //
 //  Composition root: builds the service graph once (catalog service,
-//  persistence, playback engine, downloads) and injects shared stores via
-//  the environment (AGENTS.md §6). Arabic-first UI: forced RTL + `ar` locale.
+//  persistence, playback engine, downloads, library) and injects shared
+//  stores via the environment (AGENTS.md §6). Arabic-first UI: forced RTL
+//  + `ar` locale.
 //
 
 import SwiftUI
@@ -37,6 +38,7 @@ struct TilawahApp: App {
     @State private var catalogStore: CatalogStore
     @State private var playbackController: PlaybackController
     @State private var downloadStore: DownloadStore
+    @State private var libraryStore: LibraryStore
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -46,18 +48,25 @@ struct TilawahApp: App {
         let playback = PlaybackController(stateStore: stateStore)
         let downloads = DownloadStore(container: container)
         downloads.playbackController = playback
+        let library = LibraryStore(container: container)
+        playback.onTrackChanged = { asset in library.recordPlay(asset) }
+        playback.onPositionSaved = { assetID, position in
+            library.updateHistoryPosition(assetID: assetID, position: position)
+        }
         _catalogStore = State(initialValue: CatalogStore(service: MP3QuranService()))
         // Restores the last session inside; never auto-plays.
         _playbackController = State(initialValue: playback)
         _downloadStore = State(initialValue: downloads)
+        _libraryStore = State(initialValue: library)
     }
 
     var body: some Scene {
         WindowGroup {
-            RecitersView()
+            RootView()
                 .environment(catalogStore)
                 .environment(playbackController)
                 .environment(downloadStore)
+                .environment(libraryStore)
                 .environment(\.locale, Locale(identifier: "ar"))
                 .environment(\.layoutDirection, .rightToLeft)
                 .onChange(of: scenePhase) { _, phase in
