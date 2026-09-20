@@ -13,8 +13,11 @@ struct SurahListView: View {
     @Environment(CatalogStore.self) private var store
     @Environment(PlaybackController.self) private var controller
     @Environment(DownloadStore.self) private var downloads
+    @Environment(LibraryStore.self) private var library
     let reciter: Reciter
     let mushaf: Mushaf
+
+    @State private var playlistAsset: AudioAsset?
 
     private var queue: [AudioAsset] {
         store.queueAssets(reciter: reciter, mushaf: mushaf)
@@ -43,6 +46,23 @@ struct SurahListView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                Button {
+                                    library.toggleFavorite(asset)
+                                } label: {
+                                    Label(
+                                        library.isFavorite(assetID: asset.id)
+                                            ? "إزالة من المفضلة" : "إضافة إلى المفضلة",
+                                        systemImage: library.isFavorite(assetID: asset.id)
+                                            ? "heart.slash" : "heart"
+                                    )
+                                }
+                                Button {
+                                    playlistAsset = asset
+                                } label: {
+                                    Label("إضافة إلى قائمة…", systemImage: "text.badge.plus")
+                                }
+                            }
                             DownloadControl(asset: asset)
                         }
                     }
@@ -55,6 +75,9 @@ struct SurahListView: View {
         }
         .listStyle(.plain)
         .navigationTitle(mushaf.name)
+        .sheet(item: $playlistAsset) { asset in
+            AddToPlaylistSheet(asset: asset)
+        }
     }
 }
 
@@ -114,6 +137,7 @@ private struct SurahRow: View {
     .environment(CatalogStore(service: PreviewCatalogService()))
     .environment(PreviewPlayback.makeController())
     .environment(PreviewDownloads.makeStore())
+    .environment(PreviewLibrary.makeStore())
     .environment(\.locale, Locale(identifier: "ar"))
     .environment(\.layoutDirection, .rightToLeft)
 }

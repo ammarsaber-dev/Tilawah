@@ -158,7 +158,11 @@ public final class PlaybackStateStore {
 /// persistence is best-effort, playback never depends on it.
 public enum PersistenceFactory {
     public static func makeContainer(inMemory: Bool = false) -> ModelContainer {
-        let schema = Schema([PersistedPlaybackState.self, PersistedDownload.self])
+        let schema = Schema([
+            PersistedPlaybackState.self, PersistedDownload.self,
+            FavoriteItem.self, Playlist.self, PlaylistItem.self,
+            Bookmark.self, HistoryEntry.self,
+        ])
         if inMemory {
             do {
                 return try ModelContainer(
