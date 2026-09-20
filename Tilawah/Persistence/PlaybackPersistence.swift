@@ -161,7 +161,7 @@ public enum PersistenceFactory {
         let schema = Schema([
             PersistedPlaybackState.self, PersistedDownload.self,
             FavoriteItem.self, Playlist.self, PlaylistItem.self,
-            Bookmark.self, HistoryEntry.self,
+            Bookmark.self, HistoryEntry.self, PersistedCatalogSnapshot.self,
         ])
         if inMemory {
             do {

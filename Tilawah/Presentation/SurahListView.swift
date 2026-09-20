@@ -23,6 +23,10 @@ struct SurahListView: View {
         store.queueAssets(reciter: reciter, mushaf: mushaf)
     }
 
+    private var remainingCount: Int {
+        downloads.remainingDownloads(in: queue)
+    }
+
     var body: some View {
         List {
             if queue.isEmpty {
@@ -67,7 +71,24 @@ struct SurahListView: View {
                         }
                     }
                 } header: {
-                    Text("\(queue.count, format: .number) سورة متاحة")
+                    HStack {
+                        Text("\(queue.count, format: .number) سورة متاحة")
+                        Spacer()
+                        if remainingCount > 0 {
+                            Button {
+                                downloads.downloadAll(queue)
+                            } label: {
+                                Label(
+                                    "تنزيل الكل (\(remainingCount, format: .number))",
+                                    systemImage: "arrow.down.circle"
+                                )
+                            }
+                            .font(.footnote)
+                            .accessibilityLabel(
+                                "تنزيل كل السور المتاحة في هذه المجموعة، \(remainingCount) سورة متبقية"
+                            )
+                        }
+                    }
                 } footer: {
                     Text("اضغط على أي سورة لبدء الاستماع، أو نزّلها للاستماع دون إنترنت.")
                 }

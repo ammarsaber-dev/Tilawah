@@ -65,6 +65,28 @@ struct RecitersView: View {
                     }
                 }
                 .listStyle(.plain)
+                .safeAreaInset(edge: .top) {
+                    if store.isStale {
+                        HStack(spacing: 8) {
+                            Image(systemName: store.refreshError?.isOffline == true
+                                ? "wifi.slash" : "exclamationmark.triangle")
+                            Text("عرض نسخة محفوظة — لا يوجد اتصال حديث")
+                                .font(.footnote)
+                            Spacer()
+                            Button("إعادة المحاولة") {
+                                Task { await store.reload() }
+                            }
+                            .font(.footnote)
+                            .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(.thinMaterial)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("عرض نسخة محفوظة من الفهرس")
+                    }
+                }
             }
         }
     }

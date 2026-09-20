@@ -116,6 +116,30 @@ struct ExpandedPlayer: View {
                     .font(.footnote)
                     .foregroundStyle(controller.repeatMode == .off ? Color.secondary : Color.accentColor)
 
+                    Menu {
+                        ForEach(SleepTimerOption.minuteChoices, id: \.self) { value in
+                            Button(SleepTimerOption.minutes(value).label) {
+                                controller.setSleepTimer(minutes: value)
+                            }
+                        }
+                        Button(SleepTimerOption.endOfSurah.label) {
+                            controller.setSleepEndOfSurah()
+                        }
+                        if controller.sleepOption != .off {
+                            Button("إلغاء المؤقت", role: .destructive) {
+                                controller.cancelSleepTimer()
+                            }
+                        }
+                    } label: {
+                        Label(sleepLabel, systemImage: "moon")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(
+                        controller.sleepOption == .off ? Color.secondary : Color.accentColor
+                    )
+                    .accessibilityLabel("مؤقت النوم")
+                    .accessibilityValue(sleepLabel)
+
                     HStack(spacing: 24) {
                         Button {
                             library.toggleFavorite(asset)
@@ -178,5 +202,21 @@ struct ExpandedPlayer: View {
     private var isFavorite: Bool {
         guard let asset = controller.current else { return false }
         return library.isFavorite(assetID: asset.id)
+    }
+
+    private var sleepLabel: String {
+        switch controller.sleepOption {
+        case .off:
+            return "مؤقت النوم"
+        case .endOfSurah:
+            return "ينتهي بعد السورة"
+        case .minutes:
+            if let remaining = controller.sleepRemaining,
+               let text = SleepTimerMath.remainingLabel(remaining)
+            {
+                return "متبقٍ \(text)"
+            }
+            return controller.sleepOption.label
+        }
     }
 }
