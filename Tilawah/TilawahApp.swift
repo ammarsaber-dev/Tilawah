@@ -53,7 +53,10 @@ struct TilawahApp: App {
         playback.onPositionSaved = { assetID, position in
             library.updateHistoryPosition(assetID: assetID, position: position)
         }
-        _catalogStore = State(initialValue: CatalogStore(service: MP3QuranService()))
+        _catalogStore = State(initialValue: CatalogStore(
+            service: MP3QuranService(),
+            snapshotStore: CatalogSnapshotStore(container: container)
+        ))
         // Restores the last session inside; never auto-plays.
         _playbackController = State(initialValue: playback)
         _downloadStore = State(initialValue: downloads)

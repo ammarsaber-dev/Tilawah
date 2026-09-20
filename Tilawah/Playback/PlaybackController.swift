@@ -27,6 +27,10 @@ public final class PlaybackController {
     public private(set) var isBuffering = false
     public private(set) var repeatMode: RepeatMode = .off
     public private(set) var playbackError: String?
+    /// Sleep timer (Phase 6): minutes-based deadline or end-of-surah.
+    public private(set) var sleepOption: SleepTimerOption = .off
+    public private(set) var sleepEndsAt: Date?
+    public private(set) var sleepRemaining: Double?
 
     public var current: AudioAsset? {
         guard queue.indices.contains(index) else { return nil }
@@ -43,6 +47,7 @@ public final class PlaybackController {
     private var cancellables = Set<AnyCancellable>()
     private var itemStatusCancellable: AnyCancellable?
     private var lastSavedPosition: Double = -1
+    private var sleepTask: Task<Void, Never>?
 
     /// Fired whenever a new track starts (library history).
     public var onTrackChanged: ((AudioAsset) -> Void)?
@@ -141,6 +146,50 @@ public final class PlaybackController {
         repeatMode = repeatMode.next()
     }
 
+    // MARK: - Sleep timer
+
+    /// Starts a minutes-based sleep timer (replaces any existing timer).
+    public func setSleepTimer(minutes: Int) {
+        setSleepTimer(option: .minutes(minutes))
+    }
+
+    /// Pauses at the end of the current surah instead of advancing.
+    public func setSleepEndOfSurah() {
+        setSleepTimer(option: .endOfSurah)
+    }
+
+    public func setSleepTimer(option: SleepTimerOption) {
+        sleepTask?.cancel()
+        sleepTask = nil
+        sleepOption = option
+        sleepEndsAt = option.deadline()
+        sleepRemaining = SleepTimerMath.remaining(until: sleepEndsAt)
+        guard case let .minutes(value) = option else { return }
+        sleepTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(value) * 60 * 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                self?.fireSleepTimer()
+            }
+        }
+    }
+
+    public func cancelSleepTimer() {
+        sleepTask?.cancel()
+        sleepTask = nil
+        sleepOption = .off
+        sleepEndsAt = nil
+        sleepRemaining = nil
+    }
+
+    private func fireSleepTimer() {
+        sleepTask = nil
+        sleepOption = .off
+        sleepEndsAt = nil
+        sleepRemaining = nil
+        pause()
+    }
+
     /// Rebuilds the current item after a failure (resolves local-vs-remote again).
     public func retry() {
         guard current != nil else { return }
@@ -227,6 +276,10 @@ public final class PlaybackController {
                     self.duration = (d.isFinite && d > 0) ? d : nil
                 }
                 self.updateNowPlayingElapsed()
+                // Sleep-timer countdown for the player UI.
+                if self.sleepEndsAt != nil {
+                    self.sleepRemaining = SleepTimerMath.remaining(until: self.sleepEndsAt)
+                }
                 // Throttled persist: every ~10 s of playback.
                 if abs(self.position - self.lastSavedPosition) >= 10 {
                     self.persist()
@@ -267,6 +320,13 @@ public final class PlaybackController {
 
     private func handleItemEnd() {
         guard !queue.isEmpty else { return }
+        // End-of-surah sleep timer wins over repeat/advance: stop here.
+        if sleepOption == .endOfSurah {
+            cancelSleepTimer()
+            player.pause()
+            persist()
+            return
+        }
         switch repeatMode {
         case .one:
             seek(to: 0)

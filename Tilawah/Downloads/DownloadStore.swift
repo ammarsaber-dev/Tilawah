@@ -118,6 +118,46 @@ public final class DownloadStore {
         pumpQueue()
     }
 
+    /// Enqueues every asset in `assets` that is missing locally.
+    /// Already-completed, queued, or actively-downloading assets are skipped,
+    /// so tapping "download all" twice never duplicates work. The existing
+    /// 3-concurrent FIFO pump handles the backlog.
+    /// - Returns: the number of assets newly enqueued.
+    @discardableResult
+    public func downloadAll(_ assets: [AudioAsset]) -> Int {
+        var enqueued = 0
+        for asset in assets {
+            let id = asset.id
+            switch states[id] {
+            case .completed, .queued, .downloading, .paused:
+                continue
+            case .failed, .notDownloaded, nil:
+                break
+            }
+            let file = DownloadFilesystem.destination(for: asset, localRoot: localRoot)
+            if PlaybackSource.isPlayableFile(at: file) {
+                adoptCompleted(asset)
+                continue
+            }
+            meta[id] = asset
+            upsertRecord(PersistedDownload(asset: asset))
+            states[id] = .queued
+            queue.request(id)
+            enqueued += 1
+        }
+        pumpQueue()
+        return enqueued
+    }
+
+    /// Assets in `assets` still missing locally (for "download all" counts).
+    public func remainingDownloads(in assets: [AudioAsset]) -> Int {
+        assets.filter { asset in
+            if states[asset.id] == .completed { return false }
+            let file = DownloadFilesystem.destination(for: asset, localRoot: localRoot)
+            return !PlaybackSource.isPlayableFile(at: file)
+        }.count
+    }
+
     public func pause(assetID: String) {
         guard let task = tasks[assetID], states[assetID]?.isDownloading == true else { return }
         suppressedErrorTaskIDs.insert(task.taskIdentifier)

@@ -2,9 +2,16 @@
 //  CatalogStore.swift
 //  Tilawah
 //
-//  Shared catalog state (Phase 2). Views observe this store directly via
-//  `@Environment`; no ViewModel-per-screen (AGENTS.md §6). All state lives
-//  on `@MainActor`; networking stays inside the injected service.
+//  Shared catalog state (Phase 2; snapshot persistence added in Phase 6).
+//  Views observe this store directly via `@Environment`; no
+//  ViewModel-per-screen (AGENTS.md §6). All state lives on `@MainActor`;
+//  networking stays inside the injected service.
+//
+//  Offline rule: the last good network response is persisted to SwiftData.
+//  A cold launch with no connectivity shows the snapshot marked stale
+//  (`isStale == true`) instead of an error wall; the next successful
+//  `reload()` replaces it. The snapshot never orphans downloads — records
+//  carry their own metadata (AGENTS.md §5.3).
 //
 
 import Foundation
@@ -18,23 +25,37 @@ public enum CatalogLoadPhase: Equatable, Sendable {
     case failed(CatalogError)
 }
 
-/// In-memory catalog snapshot with aggressive caching: once loaded, `load()`
-/// is a no-op until `reload()` is called. (A persisted SwiftData snapshot
-/// replaces this in a later phase per AGENTS.md §6.)
 @Observable
 @MainActor
 public final class CatalogStore {
     private let service: any QuranCatalogService
+    private let snapshotStore: CatalogSnapshotStore?
 
     public private(set) var phase: CatalogLoadPhase = .idle
     public private(set) var reciters: [Reciter] = []
     public private(set) var suwar: [Surah] = []
     public private(set) var riwayat: [Riwayah] = []
+    /// True when the visible data came from the persisted snapshot and has
+    /// not been revalidated against the network yet this launch.
+    public private(set) var isStale = false
+    /// Last refresh failure when stale data is shown (nil on fresh loads).
+    public private(set) var refreshError: CatalogError?
+    public private(set) var lastUpdated: Date?
 
     private var inFlight: Task<Void, Never>?
 
-    public init(service: any QuranCatalogService) {
+    public init(service: any QuranCatalogService, snapshotStore: CatalogSnapshotStore? = nil) {
         self.service = service
+        self.snapshotStore = snapshotStore
+        if let snapshot = snapshotStore?.load() {
+            reciters = snapshot.reciters
+            suwar = snapshot.suwar
+            riwayat = snapshot.riwayat
+            suwarByID = Dictionary(uniqueKeysWithValues: snapshot.suwar.map { ($0.id, $0) })
+            lastUpdated = snapshot.updatedAt
+            isStale = true
+            phase = .loaded
+        }
     }
 
     public var isLoaded: Bool {
@@ -47,13 +68,14 @@ public final class CatalogStore {
         return nil
     }
 
-    /// Loads reciters + suwar + riwayat unless already loaded/loading.
+    /// Loads reciters + suwar + riwayat unless fresh data is already shown.
+    /// Stale snapshot data still triggers a network refresh.
     public func load() async {
         if let inFlight {
             await inFlight.value
             return
         }
-        guard phase != .loaded else { return }
+        guard phase != .loaded || isStale else { return }
         let task = Task { await performLoad() }
         inFlight = task
         await task.value
@@ -72,7 +94,10 @@ public final class CatalogStore {
     }
 
     private func performLoad() async {
-        phase = .loading
+        let hadData = !reciters.isEmpty
+        if !hadData {
+            phase = .loading
+        }
         do {
             async let fetchedReciters = service.fetchReciters(language: "ar")
             async let fetchedSuwar = service.fetchSuwar(language: "ar")
@@ -82,11 +107,29 @@ public final class CatalogStore {
             self.suwar = suwar
             self.riwayat = riwayat
             self.suwarByID = Dictionary(uniqueKeysWithValues: suwar.map { ($0.id, $0) })
+            self.lastUpdated = Date()
+            self.isStale = false
+            self.refreshError = nil
             phase = .loaded
+            snapshotStore?.save(reciters: reciters, suwar: suwar, riwayat: riwayat)
         } catch let error as CatalogError {
-            phase = .failed(error)
+            if hadData {
+                // Keep showing the snapshot; surface the error as a banner,
+                // not an error wall.
+                isStale = true
+                refreshError = error
+                phase = .loaded
+            } else {
+                phase = .failed(error)
+            }
         } catch {
-            phase = .failed(.transport(error.localizedDescription))
+            if hadData {
+                isStale = true
+                refreshError = .transport(error.localizedDescription)
+                phase = .loaded
+            } else {
+                phase = .failed(.transport(error.localizedDescription))
+            }
         }
     }
 
@@ -128,10 +171,52 @@ public final class CatalogStore {
 
     /// Reciters matching `query` against normalized Arabic names.
     /// Empty query returns all reciters in provider order.
+    /// Matching is token-based and typo-tolerant: every query token must
+    /// match (substring or one-edit fuzzy) at least one name token, in any
+    /// order — so "احمد العجمي" and "العجمي احمد" both match, and a
+    /// single-letter typo still finds the reciter.
     public func filteredReciters(query: String) -> [Reciter] {
-        let normalized = Self.normalizeArabic(query)
-        guard !normalized.isEmpty else { return reciters }
-        return reciters.filter { Self.normalizeArabic($0.name).contains(normalized) }
+        let queryTokens = Self.tokenizeArabic(query)
+        guard !queryTokens.isEmpty else { return reciters }
+        return reciters.filter { reciter in
+            let nameTokens = Self.tokenizeArabic(reciter.name)
+            guard !nameTokens.isEmpty else { return false }
+            return queryTokens.allSatisfy { queryToken in
+                nameTokens.contains { Self.tokenMatches(queryToken, in: $0) }
+            }
+        }
+    }
+
+    private static func tokenMatches(_ query: String, in name: String) -> Bool {
+        if name.contains(query) { return true }
+        // Single-edit tolerance for short tokens, two edits for long ones.
+        // Thresholds stay tight to avoid false positives across the catalog.
+        let threshold = query.count <= 4 ? 1 : 2
+        return levenshtein(query, name) <= threshold
+    }
+
+    private static func tokenizeArabic(_ text: String) -> [String] {
+        normalizeArabic(text).split(separator: " ").map(String.init).filter { !$0.isEmpty }
+    }
+
+    /// Edit distance over characters (Levenshtein). Pure and testable.
+    static func levenshtein(_ lhs: String, _ rhs: String) -> Int {
+        let a = Array(lhs)
+        let b = Array(rhs)
+        if a.isEmpty { return b.count }
+        if b.isEmpty { return a.count }
+        var row = Array(0 ... b.count)
+        for i in 1 ... a.count {
+            var previous = row[0]
+            row[0] = i
+            for j in 1 ... b.count {
+                let current = row[j]
+                let cost = a[i - 1] == b[j - 1] ? 0 : 1
+                row[j] = min(row[j] + 1, row[j - 1] + 1, previous + cost)
+                previous = current
+            }
+        }
+        return row[b.count]
     }
 
     /// Normalizes Arabic for search: strips diacritics (harakat — which
