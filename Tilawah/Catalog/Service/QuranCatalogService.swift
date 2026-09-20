@@ -15,6 +15,7 @@ public enum CatalogError: Error, LocalizedError, Equatable, Sendable {
     case httpStatus(Int)
     case decodingFailed(String)
     case transport(String)
+    case offline
     case missingServer(reciterID: Int, mushafID: Int)
 
     public var errorDescription: String? {
@@ -23,9 +24,16 @@ public enum CatalogError: Error, LocalizedError, Equatable, Sendable {
         case let .httpStatus(code): "خطأ في الشبكة (HTTP \(code))"
         case let .decodingFailed(detail): "تعذّر تحليل البيانات: \(detail)"
         case let .transport(detail): "تعذّر الاتصال: \(detail)"
+        case .offline: "لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مجددًا."
         case let .missingServer(reciterID, mushafID):
             "لا يتوفر خادم للتسجيل (reciter \(reciterID), mushaf \(mushafID))"
         }
+    }
+
+    /// True when the failure is a connectivity loss (eligible for the offline UI).
+    public var isOffline: Bool {
+        if case .offline = self { return true }
+        return false
     }
 }
 
