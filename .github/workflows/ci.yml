@@ -1,5 +1,12 @@
 # CI — build + test the Tilawah scheme on an available iPhone simulator.
 # No signing (simulator only), no third-party actions beyond checkout.
+#
+# Runner pinning (verified 2026-09-20 against actions/runner-images):
+# the project's objectVersion (110) needs Xcode 27, and GitHub installs
+# only one Xcode major per macOS image — so `macos-latest` (Xcode 26.6
+# default) can never open this project. The dedicated `xcode-27` image
+# (macOS 27, Xcode 27.0 27A266a, iOS 27 runtime) is required. It is
+# public preview (no SLA); revisit when a GA image ships Xcode 27.
 
 name: CI
 
@@ -9,14 +16,20 @@ on:
 
 jobs:
   build-test:
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Xcode version
-        run: xcodebuild -version
+      - name: Require Xcode 27
+        run: |
+          VER=$(xcodebuild -version | head -n 1)
+          echo "$VER"
+          case "$VER" in
+            "Xcode 27."*) ;;
+            *) echo "ERROR: this project needs Xcode 27 (got: $VER)"; exit 1 ;;
+          esac
 
       - name: Resolve an available iPhone simulator
         id: sim
