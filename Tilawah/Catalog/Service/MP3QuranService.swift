@@ -98,6 +98,8 @@ public struct MP3QuranService: QuranCatalogService {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(from: url)
+        } catch let urlError as URLError where urlError.code == .notConnectedToInternet {
+            throw CatalogError.offline
         } catch {
             throw CatalogError.transport(error.localizedDescription)
         }
